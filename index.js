@@ -106,3 +106,9 @@ app.post('/api/auth/kakao', async (req, res) => {
 app.listen(port, () => {
   console.log(`Quizly backend listening at http://localhost:${port}`);
 });
+
+// 로그아웃 엔드포인트
+app.post('/api/auth/logout', (req, res) => {
+  console.log('로그아웃 요청 수신. 클라이언트에서 토큰 삭제 처리됨.');
+  res.status(200).json({ message: '로그아웃 성공' });
+});
