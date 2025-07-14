@@ -1,15 +1,15 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  // 카카오 로그인용 필드
-  kakaoId: { type: String, sparse: true, unique: true },
-  // 이메일/비밀번호 로그인용 필드
-  email: { type: String, sparse: true, unique: true },
+  // 카카오 로그인용 필드 - unique 제거
+  kakaoId: { type: String, sparse: true },
+  // 이메일/비밀번호 로그인용 필드 - unique 제거
+  email: { type: String, sparse: true },
   password: { type: String },
-  // 공통 필드
-  nickname: { type: String, required: true, unique: true },
+  // 공통 필드 - unique 제거
+  nickname: { type: String, required: true },
   profileImage: { type: String },
-  refreshToken: { type: String }, // 카카오 refresh token 저장
+  refreshToken: { type: String },
   // 추가 정보
   gender: { type: String, enum: ['male', 'female', 'other'] },
   school: { 
