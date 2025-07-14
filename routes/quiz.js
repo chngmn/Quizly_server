@@ -27,7 +27,7 @@ const upload = multer({ storage: storage });
 // 퀴즈(문제) 생성 (로그인 필요)
 router.post('/', auth, upload.array('files'), async (req, res) => {
   try {
-    const { title, description, subject, major, type, content, explanation } = req.body;
+    const { description, subject, major, type, content, explanation } = req.body;
     let options = [];
     let answer = null;
 
@@ -50,7 +50,6 @@ router.post('/', auth, upload.array('files'), async (req, res) => {
     const filePaths = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
 
     const quiz = new Quiz({
-      title,
       description,
       subject,
       major,
