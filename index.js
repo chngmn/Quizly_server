@@ -3,15 +3,9 @@ const express = require('express');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const mongoose = require('mongoose'); // mongoose 임포트
-const User = require('./models/User'); // User 모델 임포트
-
-const quizRouter = require('./routes/quiz');
-
-const recordRouter = require('./routes/record');
-const userRouter = require('./routes/user');
-const majorRouter = require('./routes/major');
-const subjectRouter = require('./routes/subject');
+const mongoose = require('mongoose');
+const User = require('./models/User');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const port = 8000;
@@ -19,19 +13,11 @@ const port = 8000;
 app.use(express.json());
 app.use(cors());
 
-app.use('/api/quizzes', quizRouter);
-
-app.use('/api/records', recordRouter);
-app.use('/api/user', userRouter);
-app.use('/api/majors', majorRouter);
-app.use('/api/subjects', subjectRouter);
-
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/quizly'; // MongoDB URI
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/quizly';
 
-// MongoDB 연결
 mongoose.connect(MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -43,15 +29,103 @@ app.get('/', (req, res) => {
   res.send('Hello from Quizly Backend (Node.js/Express)!');
 });
 
+// 이메일/비밀번호 회원가입
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { email, nickname, password, gender, school, marketingAgreement } = req.body;
+    if (!email || !nickname || !password) {
+      return res.status(400).json({ error: '모든 필드를 입력해주세요.' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: '유효한 이메일 주소를 입력해주세요.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: '비밀번호는 최소 6자 이상이어야 합니다.' });
+    }
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return res.status(400).json({ error: '이미 사용 중인 이메일입니다.' });
+    }
+    const existingNickname = await User.findOne({ nickname });
+    if (existingNickname) {
+      return res.status(400).json({ error: '이미 사용 중인 닉네임입니다.' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const user = await User.create({
+      email,
+      nickname,
+      password: hashedPassword,
+      gender,
+      school,
+      marketingAgreement: marketingAgreement || false,
+    });
+
+    const quizlyToken = jwt.sign(
+      { userId: user._id, nickname: user.nickname },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.status(201).json({
+      message: '회원가입 성공',
+      token: quizlyToken,
+      user: {
+        id: user._id,
+        nickname: user.nickname,
+        email: user.email,
+      },
+    });
+
+  } catch (error) {
+    console.error('회원가입 처리 중 오류 발생:', error);
+    res.status(500).json({ error: '회원가입 처리 실패' });
+  }
+});
+
+// 이메일/비밀번호 로그인
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: '이메일과 비밀번호를 입력해주세요.' });
+    }
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+    }
+    const quizlyToken = jwt.sign(
+      { userId: user._id, nickname: user.nickname },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    res.status(200).json({
+      message: '로그인 성공',
+      token: quizlyToken,
+      user: {
+        id: user._id,
+        nickname: user.nickname,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error('로그인 처리 중 오류 발생:', error);
+    res.status(500).json({ error: '로그인 처리 실패' });
+  }
+});
+
+// 카카오 로그인
 app.post('/api/auth/kakao', async (req, res) => {
   const { code } = req.body;
-
   if (!code) {
     return res.status(400).json({ error: '인가 코드가 없습니다.' });
   }
-
   try {
-    console.log('Attempting to get Kakao token...');
     const tokenResponse = await axios.post('https://kauth.kakao.com/oauth/token', null, {
       params: {
         grant_type: 'authorization_code',
@@ -63,119 +137,48 @@ app.post('/api/auth/kakao', async (req, res) => {
         'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
       },
     });
-    console.log('Kakao token obtained.');
-
     const { access_token, refresh_token } = tokenResponse.data;
-    console.log('카카오 토큰 발급 성공:', access_token);
-
-    console.log('Attempting to get Kakao user info...');
     const userResponse = await axios.get('https://kapi.kakao.com/v2/user/me', {
       headers: {
         Authorization: `Bearer ${access_token}`,
         'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
       },
     });
-    console.log('Kakao user info obtained.');
-
     const kakaoUser = userResponse.data;
-    console.log('카카오 사용자 정보:', kakaoUser);
-
-    // 자체 서비스 사용자 처리 (MongoDB 연동)
-    let user;
-    console.log('Searching for existing user...');
-    const existingUser = await User.findOne({ kakaoId: kakaoUser.id });
-    console.log('Existing user search complete.');
-
-    if (existingUser) {
-      console.log('Existing user found. Updating...');
-      existingUser.nickname = kakaoUser.properties.nickname;
-      existingUser.profileImage = kakaoUser.properties.profile_image;
-      existingUser.refreshToken = refresh_token; // refresh_token 저장
-      await existingUser.save();
-      user = existingUser;
-      console.log('Existing user updated.');
+    let user = await User.findOne({ kakaoId: kakaoUser.id });
+    if (user) {
+      user.nickname = kakaoUser.properties.nickname;
+      user.profileImage = kakaoUser.properties.profile_image;
+      user.refreshToken = refresh_token;
+      await user.save();
     } else {
-      console.log('No existing user found. Creating new user...');
       user = await User.create({
         kakaoId: kakaoUser.id,
         nickname: kakaoUser.properties.nickname,
         profileImage: kakaoUser.properties.profile_image,
-        refreshToken: refresh_token, // refresh_token 저장
+        refreshToken: refresh_token,
       });
-      console.log('New user created.');
     }
-
-    console.log('Signing JWT...');
     const quizlyToken = jwt.sign(
-      { userId: user._id, nickname: user.nickname }, // 자체 DB의 _id 사용
+      { userId: user._id, nickname: user.nickname },
       JWT_SECRET,
       { expiresIn: '1h' }
     );
-    console.log('JWT signed.');
-
-    console.log('Sending success response to frontend...');
     res.status(200).json({
       message: '로그인 성공',
       token: quizlyToken,
       user: {
-        id: user._id, // 자체 DB의 ID 반환
+        id: user._id,
         nickname: user.nickname,
         profileImage: user.profileImage,
       },
     });
-    console.log('Success response sent.');
-
   } catch (error) {
-    console.error('카카오 로그인 처리 중 오류 발생:', error); // Log the full error object
-    if (error.response) {
-      console.error('Error response data:', error.response.data);
-      console.error('Error response status:', error.response.status);
-      console.error('Error response headers:', error.response.headers);
-    } else if (error.request) {
-      console.error('Error request:', error.request);
-    } else {
-      console.error('Error message:', error.message);
-    }
+    console.error('카카오 로그인 처리 중 오류 발생:', error);
     res.status(500).json({ error: '카카오 로그인 처리 실패' });
   }
 });
 
 app.listen(port, () => {
   console.log(`Quizly backend listening at http://localhost:${port}`);
-});
-
-// 로그아웃 엔드포인트
-app.post('/api/auth/logout', (req, res) => {
-  console.log('로그아웃 요청 수신. 클라이언트에서 토큰 삭제 처리됨.');
-  res.status(200).json({ message: '로그아웃 성공' });
-});
-
-// 토큰 재발급 엔드포인트
-app.post('/api/auth/refresh-token', async (req, res) => {
-  const { userId } = req.body; // 클라이언트에서 userId를 보내준다고 가정
-
-  if (!userId) {
-    return res.status(400).json({ error: 'userId가 필요합니다.' });
-  }
-
-  try {
-    const user = await User.findById(userId);
-
-    if (!user || !user.refreshToken) {
-      return res.status(401).json({ error: '유효하지 않은 사용자 또는 리프레시 토큰이 없습니다.' });
-    }
-
-    // 새로운 액세스 토큰 생성
-    const newQuizlyToken = jwt.sign(
-      { userId: user._id, nickname: user.nickname },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    res.status(200).json({ token: newQuizlyToken });
-
-  } catch (error) {
-    console.error('토큰 재발급 중 오류 발생:', error);
-    res.status(500).json({ error: '토큰 재발급 실패' });
-  }
 });
