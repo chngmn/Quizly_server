@@ -7,7 +7,7 @@ const auth = require('../middleware/auth');
 router.post('/', auth, async (req, res) => {
   try {
     const quiz = new Quiz({
-      ...req.body, // title, subject, description, type, content, options, answer 등
+      ...req.body, // title, description, type, content, options, answer, explanation
       creator: req.user.userId, // 인증된 사용자의 ID를 creator로 설정
     });
     await quiz.save();
@@ -21,7 +21,9 @@ router.post('/', auth, async (req, res) => {
 router.get('/myquizzes', auth, async (req, res) => {
   try {
     const quizzes = await Quiz.find({ creator: req.user.userId })
-                              .populate('creator', 'nickname');
+                              .populate('creator', 'nickname')
+                              .populate('major', 'name') // major 필드 populate
+                              .populate('subject', 'name'); // subject 필드 populate
     res.json(quizzes);
   } catch (err) {
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
@@ -32,7 +34,9 @@ router.get('/myquizzes', auth, async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const quizzes = await Quiz.find()
-                              .populate('creator', 'nickname');
+                              .populate('creator', 'nickname')
+                              .populate('major', 'name')
+                              .populate('subject', 'name');
     res.json(quizzes);
   } catch (err) {
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
@@ -43,7 +47,9 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id)
-                           .populate('creator', 'nickname');
+                           .populate('creator', 'nickname')
+                           .populate('major', 'name')
+                           .populate('subject', 'name');
     if (!quiz) return res.status(404).json({ error: '퀴즈를 찾을 수 없습니다.' });
     res.json(quiz);
   } catch (err) {
@@ -86,3 +92,4 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 module.exports = router;
+
