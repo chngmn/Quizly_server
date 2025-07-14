@@ -6,12 +6,14 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
+const userRouter = require('./routes/user');
 
 const app = express();
 const port = 8000;
 
 app.use(express.json());
 app.use(cors());
+app.use('/api/user', userRouter);
 
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI;
@@ -146,26 +148,137 @@ app.post('/api/auth/kakao', async (req, res) => {
     });
     const kakaoUser = userResponse.data;
     let user = await User.findOne({ kakaoId: kakaoUser.id });
+    
     if (user) {
+      // 기존 유저: 프로필 정보 업데이트
       user.nickname = kakaoUser.properties.nickname;
       user.profileImage = kakaoUser.properties.profile_image;
       user.refreshToken = refresh_token;
       await user.save();
+      
+      // school, gender 등 추가 정보가 없으면 needsAdditionalInfo: true로 응답
+      if (!user.school || !user.gender) {
+        return res.status(200).json({
+          needsAdditionalInfo: true,
+          kakaoId: user.kakaoId,
+          nickname: user.nickname,
+          profileImage: user.profileImage,
+          refreshToken: user.refreshToken,
+        });
+      }
+      
+      // 추가 정보가 모두 있으면 바로 로그인 처리
+      const quizlyToken = jwt.sign(
+        { userId: user._id, nickname: user.nickname },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+      return res.status(200).json({
+        message: '로그인 성공',
+        token: quizlyToken,
+        user: {
+          id: user._id,
+          nickname: user.nickname,
+          profileImage: user.profileImage,
+        },
+      });
     } else {
-      user = await User.create({
+      // 신규 유저: 임시 유저 생성 (추가 정보 입력 후 완전히 저장)
+      console.log('신규 카카오 유저 생성:', kakaoUser.id);
+      const tempUser = new User({
         kakaoId: kakaoUser.id,
         nickname: kakaoUser.properties.nickname,
         profileImage: kakaoUser.properties.profile_image,
         refreshToken: refresh_token,
       });
+      await tempUser.save();
+      console.log('임시 유저 저장 완료:', tempUser._id);
+      
+      return res.status(200).json({
+        needsAdditionalInfo: true,
+        kakaoId: tempUser.kakaoId,
+        nickname: tempUser.nickname,
+        profileImage: tempUser.profileImage,
+        refreshToken: tempUser.refreshToken,
+      });
     }
+  } catch (error) {
+    console.error('카카오 로그인 처리 중 오류 발생:', error);
+    res.status(500).json({ error: '카카오 로그인 처리 실패' });
+  }
+});
+
+// 카카오 추가 정보 입력(최종 회원가입)
+app.post('/api/auth/kakao/complete-signup', async (req, res) => {
+  try {
+    const { kakaoId, nickname, profileImage, refreshToken, gender, school, marketingAgreement } = req.body;
+    console.log('카카오 회원가입 완료 요청:', { kakaoId, nickname, gender, school });
+    
+    if (!kakaoId || !nickname || !gender || !school) {
+      return res.status(400).json({ error: '필수 정보를 모두 입력해주세요.' });
+    }
+    
+    // 닉네임 중복 체크 (같은 kakaoId가 아닌 다른 유저와 중복 체크)
+    const existingNickname = await User.findOne({ 
+      nickname, 
+      kakaoId: { $ne: kakaoId } 
+    });
+    if (existingNickname) {
+      return res.status(400).json({ error: '이미 사용 중인 닉네임입니다.' });
+    }
+    
+    // 해당 카카오 유저 찾기
+    let user = await User.findOne({ kakaoId });
+    if (!user) {
+      return res.status(404).json({ error: '카카오 유저를 찾을 수 없습니다.' });
+    }
+    
+    // gender 값 처리 (프론트엔드에서 이미 영어로 보내고 있음)
+    let genderValue = gender;
+    // 혹시 한글 값이 들어올 경우를 대비한 변환
+    if (gender === '남성') genderValue = 'male';
+    if (gender === '여성') genderValue = 'female';
+    if (gender === '기타') genderValue = 'other';
+    
+    // school 한글 → 영어 enum 변환
+    const schoolMap = {
+      '서울대': 'seoul_national',
+      '연세대': 'yonsei',
+      '고려대': 'korea',
+      '성균관대': 'sungkyunkwan',
+      '한양대': 'hanyang',
+      '경희대': 'kyunghee',
+      '서강대': 'sogang',
+      '홍익대': 'hongik',
+      '동국대': 'dongguk',
+      '중앙대': 'chungang',
+      '국민대': 'kookmin',
+      '세종대': 'sejong',
+      '건국대': 'konkuk',
+      '카이스트': 'kaist',
+      '기타': 'other'
+    };
+    let schoolValue = schoolMap[school] || school;
+    
+    // 유저 정보 업데이트
+    user.nickname = nickname;
+    user.profileImage = profileImage;
+    user.refreshToken = refreshToken;
+    user.gender = genderValue;
+    user.school = schoolValue;
+    user.marketingAgreement = marketingAgreement || false;
+    await user.save();
+    console.log('카카오 유저 정보 업데이트 완료:', user._id);
+    
     const quizlyToken = jwt.sign(
       { userId: user._id, nickname: user.nickname },
       JWT_SECRET,
       { expiresIn: '1h' }
     );
+    
+    console.log('카카오 회원가입 완료:', user.nickname);
     res.status(200).json({
-      message: '로그인 성공',
+      message: '회원가입 성공',
       token: quizlyToken,
       user: {
         id: user._id,
@@ -174,8 +287,8 @@ app.post('/api/auth/kakao', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('카카오 로그인 처리 중 오류 발생:', error);
-    res.status(500).json({ error: '카카오 로그인 처리 실패' });
+    console.error('카카오 추가 정보 입력 처리 중 오류:', error);
+    res.status(500).json({ error: '카카오 추가 정보 입력 처리 실패' });
   }
 });
 
