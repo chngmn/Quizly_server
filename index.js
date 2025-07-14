@@ -154,6 +154,29 @@ app.post('/api/auth/kakao', async (req, res) => {
       user.nickname = kakaoUser.properties.nickname;
       user.profileImage = kakaoUser.properties.profile_image;
       user.refreshToken = refresh_token;
+      
+      // school 값이 한글로 되어 있으면 영문으로 변환
+      if (user.school && !['seoul_national', 'yonsei', 'korea', 'sungkyunkwan', 'hanyang', 'kyunghee', 'sogang', 'hongik', 'dongguk', 'chungang', 'kookmin', 'sejong', 'konkuk', 'kaist', 'other'].includes(user.school)) {
+        const schoolMap = {
+          '서울대학교': 'seoul_national',
+          '연세대학교': 'yonsei',
+          '고려대학교': 'korea',
+          '성균관대학교': 'sungkyunkwan',
+          '한양대학교': 'hanyang',
+          '경희대학교': 'kyunghee',
+          '서강대학교': 'sogang',
+          '홍익대학교': 'hongik',
+          '동국대학교': 'dongguk',
+          '중앙대학교': 'chungang',
+          '국민대학교': 'kookmin',
+          '세종대학교': 'sejong',
+          '건국대학교': 'konkuk',
+          '카이스트': 'kaist',
+          '기타': 'other'
+        };
+        user.school = schoolMap[user.school] || 'other';
+      }
+      
       await user.save();
       
       // school, gender 등 추가 정보가 없으면 needsAdditionalInfo: true로 응답
@@ -218,7 +241,7 @@ app.post('/api/auth/kakao/complete-signup', async (req, res) => {
       return res.status(400).json({ error: '필수 정보를 모두 입력해주세요.' });
     }
     
-    // 닉네임 중복 체크 (같은 kakaoId가 아닌 다른 유저와 중복 체크)
+    // 수동 중복 체크 (같은 kakaoId가 아닌 다른 유저와 중복 체크)
     const existingNickname = await User.findOne({ 
       nickname, 
       kakaoId: { $ne: kakaoId } 
@@ -233,32 +256,53 @@ app.post('/api/auth/kakao/complete-signup', async (req, res) => {
       return res.status(404).json({ error: '카카오 유저를 찾을 수 없습니다.' });
     }
     
-    // gender 값 처리 (프론트엔드에서 이미 영어로 보내고 있음)
+    // gender 값 처리
     let genderValue = gender;
-    // 혹시 한글 값이 들어올 경우를 대비한 변환
     if (gender === '남성') genderValue = 'male';
     if (gender === '여성') genderValue = 'female';
     if (gender === '기타') genderValue = 'other';
     
-    // school 한글 → 영어 enum 변환
+    // school 값 처리
+    console.log('전달받은 school 값:', school);
+    console.log('school 타입:', typeof school);
+    
+    const validSchoolValues = [
+      'seoul_national', 'yonsei', 'korea', 'sungkyunkwan', 'hanyang', 
+      'kyunghee', 'sogang', 'hongik', 'dongguk', 'chungang', 
+      'kookmin', 'sejong', 'konkuk', 'kaist', 'other'
+    ];
+    
+    let schoolValue = school;
+    
     const schoolMap = {
-      '서울대': 'seoul_national',
-      '연세대': 'yonsei',
-      '고려대': 'korea',
-      '성균관대': 'sungkyunkwan',
-      '한양대': 'hanyang',
-      '경희대': 'kyunghee',
-      '서강대': 'sogang',
-      '홍익대': 'hongik',
-      '동국대': 'dongguk',
-      '중앙대': 'chungang',
-      '국민대': 'kookmin',
-      '세종대': 'sejong',
-      '건국대': 'konkuk',
+      '서울대학교': 'seoul_national',
+      '연세대학교': 'yonsei',
+      '고려대학교': 'korea',
+      '성균관대학교': 'sungkyunkwan',
+      '한양대학교': 'hanyang',
+      '경희대학교': 'kyunghee',
+      '서강대학교': 'sogang',
+      '홍익대학교': 'hongik',
+      '동국대학교': 'dongguk',
+      '중앙대학교': 'chungang',
+      '국민대학교': 'kookmin',
+      '세종대학교': 'sejong',
+      '건국대학교': 'konkuk',
       '카이스트': 'kaist',
       '기타': 'other'
     };
-    let schoolValue = schoolMap[school] || school;
+    
+    // school 값이 한글이면 무조건 영문 코드로 변환
+    if (schoolMap[school]) {
+      schoolValue = schoolMap[school];
+    } else if (!Object.values(schoolMap).includes(school)) {
+      // 영문 코드도 아니고, 한글 매핑도 없으면 기타로 처리
+      schoolValue = 'other';
+    }
+    
+    console.log('전달받은 school 값:', school);
+    console.log('schoolMap[school]:', schoolMap[school]);
+    console.log('최종 schoolValue:', schoolValue);
     
     // 유저 정보 업데이트
     user.nickname = nickname;
