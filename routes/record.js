@@ -1,17 +1,79 @@
 const express = require('express');
 const router = express.Router();
 const Record = require('../models/Record');
+const Quiz = require('../models/Quiz'); // Quiz 모델 임포트
+const auth = require('../middleware/auth'); // 인증 미들웨어 임포트
 
-// 응시 기록 저장
-router.post('/', async (req, res) => {
+// 퀴즈 응시 기록 저장 (오답노트 기능 포함)
+router.post('/', auth, async (req, res) => {
   try {
-    const record = new Record(req.body);
-    await record.save();
-    res.status(201).json(record);
+    const { quizId, isCorrect, submittedAnswer } = req.body;
+    const userId = req.user.userId;
+
+    // 퀴즈 정보 가져오기 (정답 확인용)
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ error: '퀴즈를 찾을 수 없습니다.' });
+    }
+
+    // 새로운 기록 생성
+    const newRecord = new Record({
+      user: userId,
+      quiz: quizId,
+      isCorrect,
+      submittedAnswer,
+    });
+
+    // 오답일 경우 오답노트에 추가
+    if (!isCorrect) {
+      newRecord.wrongQuizzes.push({
+        quiz: quizId,
+        submittedAnswer,
+        correctAnswer: quiz.answer, // 퀴즈의 실제 정답 저장
+      });
+    }
+
+    await newRecord.save();
+    res.status(201).json(newRecord);
   } catch (err) {
+    console.error('기록 저장 중 오류 발생:', err);
     res.status(400).json({ error: err.message });
   }
 });
 
-// 기록 조회 등도 필요에 따라 추가
+// 내 오답 목록 조회
+router.get('/wrong-answers', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    // 사용자의 모든 기록 중 wrongQuizzes 배열이 비어있지 않은 것들을 찾음
+    const wrongRecords = await Record.find({ user: userId, 'wrongQuizzes.0': { '$exists': true } })
+                                     .populate({
+                                         path: 'wrongQuizzes.quiz',
+                                         model: 'Quiz',
+                                         select: 'title content type options answer major subject',
+                                         populate: [
+                                             { path: 'major', select: 'name' },
+                                             { path: 'subject', select: 'name' }
+                                         ]
+                                     })
+                                     .sort({ createdAt: -1 }); // 최신순 정렬
+
+    // 중복된 퀴즈를 제거하고 최신 오답만 보여주기 위해 가공
+    const uniqueWrongQuizzes = {};
+    wrongRecords.forEach(record => {
+        record.wrongQuizzes.forEach(wq => {
+            // 퀴즈 ID를 키로 사용하여 최신 오답만 저장
+            if (!uniqueWrongQuizzes[wq.quiz._id] || uniqueWrongQuizzes[wq.quiz._id].recordedAt < wq.recordedAt) {
+                uniqueWrongQuizzes[wq.quiz._id] = wq;
+            }
+        });
+    });
+
+    res.json(Object.values(uniqueWrongQuizzes));
+  } catch (err) {
+    console.error('오답 목록 조회 중 오류 발생:', err);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 module.exports = router;

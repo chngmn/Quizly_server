@@ -33,8 +33,13 @@ router.post('/', auth, upload.array('files'), async (req, res) => {
 
     // 퀴즈 유형에 따라 options와 answer 파싱
     if (type === 'multiple' || type === 'ox') {
-      if (req.body.options) {
-        options = JSON.parse(req.body.options);
+      if (req.body.options && typeof req.body.options === 'string' && req.body.options.trim() !== '') {
+        try {
+          options = JSON.parse(req.body.options);
+        } catch (parseError) {
+          console.error('options 파싱 오류:', parseError);
+          return res.status(400).json({ error: '유효하지 않은 options 형식입니다.' });
+        }
       }
       answer = req.body.answer; // multiple, ox의 answer는 문자열 그대로 사용
     } else { // 'subjective' 및 'exam_archive' 유형의 경우
@@ -78,13 +83,33 @@ router.get('/myquizzes', auth, async (req, res) => {
   }
 });
 
-// 퀴즈 전체 조회 (공개)
+// 퀴즈 전체 조회 (공개) - 필터링 및 랜덤 선택 기능 추가
 router.get('/', async (req, res) => {
   try {
-    const quizzes = await Quiz.find()
+    const { majorId, subjectId, type, limit } = req.query;
+    let query = {};
+
+    if (majorId) {
+      query.major = majorId;
+    }
+    if (subjectId) {
+      query.subject = subjectId;
+    }
+    if (type) {
+      query.type = type;
+    }
+
+    let quizzes = await Quiz.find(query)
                               .populate('creator', 'nickname')
                               .populate('major', 'name')
                               .populate('subject', 'name');
+
+    if (limit) {
+      // 랜덤으로 퀴즈 선택
+      const shuffled = quizzes.sort(() => 0.5 - Math.random());
+      quizzes = shuffled.slice(0, parseInt(limit));
+    }
+
     res.json(quizzes);
   } catch (err) {
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
