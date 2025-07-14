@@ -36,9 +36,7 @@ router.post('/', auth, upload.array('files'), async (req, res) => {
       if (req.body.options) {
         options = JSON.parse(req.body.options);
       }
-      if (req.body.answer) {
-        answer = JSON.parse(req.body.answer);
-      }
+      answer = req.body.answer; // multiple, ox의 answer는 문자열 그대로 사용
     } else { // 'subjective' 및 'exam_archive' 유형의 경우
       answer = req.body.answer; // 문자열 값을 그대로 사용
       options = []; // options는 빈 배열로 유지

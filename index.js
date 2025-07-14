@@ -7,11 +7,23 @@ const mongoose = require('mongoose');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
+const quizRouter = require('./routes/quiz');
+const recordRouter = require('./routes/record');
+const userRouter = require('./routes/user');
+const majorRouter = require('./routes/major');
+const subjectRouter = require('./routes/subject');
+
 const app = express();
 const port = 8000;
 
 app.use(express.json());
 app.use(cors());
+
+app.use('/api/quizzes', quizRouter);
+app.use('/api/records', recordRouter);
+app.use('/api/user', userRouter);
+app.use('/api/majors', majorRouter);
+app.use('/api/subjects', subjectRouter);
 
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI;
