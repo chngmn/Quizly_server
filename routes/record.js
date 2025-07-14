@@ -56,12 +56,16 @@ router.get('/wrong-answers', auth, async (req, res) => {
                                              { path: 'subject', select: 'name' }
                                          ]
                                      })
-                                     .sort({ createdAt: -1 }); // 최신순 정렬
+                                     .lean() // lean()을 추가하여 일반 JavaScript 객체로 반환
+                                     .sort({ createdAt: -1 });
 
-    // 중복된 퀴즈를 제거하고 최신 오답만 보여주기 위해 가공
     const uniqueWrongQuizzes = {};
     wrongRecords.forEach(record => {
         record.wrongQuizzes.forEach(wq => {
+            // 퀴즈가 삭제되어 populate되지 않은 경우 건너뛰기
+            if (!wq.quiz) {
+                return;
+            }
             // 퀴즈 ID를 키로 사용하여 최신 오답만 저장
             if (!uniqueWrongQuizzes[wq.quiz._id] || uniqueWrongQuizzes[wq.quiz._id].recordedAt < wq.recordedAt) {
                 uniqueWrongQuizzes[wq.quiz._id] = wq;
