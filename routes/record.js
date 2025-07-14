@@ -76,4 +76,16 @@ router.get('/wrong-answers', auth, async (req, res) => {
   }
 });
 
+// 사용자가 푼 전체 퀴즈 수 조회
+router.get('/total-quizzes-taken', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const totalQuizzesTaken = await Record.countDocuments({ user: userId });
+    res.json({ totalQuizzesTaken });
+  } catch (err) {
+    console.error('전체 퀴즈 수 조회 중 오류 발생:', err);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 module.exports = router;
