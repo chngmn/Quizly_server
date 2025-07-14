@@ -6,7 +6,15 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
+
+const path = require('path'); // path 모듈 추가
+
+const quizRouter = require('./routes/quiz');
+const recordRouter = require('./routes/record');
 const userRouter = require('./routes/user');
+const majorRouter = require('./routes/major');
+const subjectRouter = require('./routes/subject');
+
 
 const app = express();
 const port = 8000;
@@ -14,6 +22,15 @@ const port = 8000;
 app.use(express.json());
 app.use(cors());
 app.use('/api/user', userRouter);
+
+app.use('/api/quizzes', quizRouter);
+app.use('/api/records', recordRouter);
+app.use('/api/user', userRouter);
+app.use('/api/majors', majorRouter);
+app.use('/api/subjects', subjectRouter);
+
+// 정적 파일 서빙 (업로드된 파일 접근용)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI;
