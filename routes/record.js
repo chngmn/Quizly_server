@@ -7,8 +7,15 @@ const auth = require('../middleware/auth'); // 인증 미들웨어 임포트
 // 퀴즈 응시 기록 저장 (오답노트 기능 포함)
 router.post('/', auth, async (req, res) => {
   try {
-    const { quizId, isCorrect, submittedAnswer } = req.body;
+    const { quizId, isCorrect, submittedAnswer, correctAnswer } = req.body;
     const userId = req.user.userId;
+
+    // 이미 기록이 있는지 확인
+    const existingRecord = await Record.findOne({ user: userId, quiz: quizId });
+    if (existingRecord) {
+      // 이미 기록이 있으면 새로 저장하지 않고 기존 기록 반환
+      return res.status(200).json(existingRecord);
+    }
 
     // 퀴즈 정보 가져오기 (정답 확인용)
     const quiz = await Quiz.findById(quizId);
@@ -29,7 +36,7 @@ router.post('/', auth, async (req, res) => {
       newRecord.wrongQuizzes.push({
         quiz: quizId,
         submittedAnswer,
-        correctAnswer: quiz.answer, // 퀴즈의 실제 정답 저장
+        correctAnswer: correctAnswer || quiz.answer, // 퀴즈의 실제 정답 저장
       });
     }
 
