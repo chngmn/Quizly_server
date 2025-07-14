@@ -77,6 +77,9 @@ app.post('/api/auth/signup', async (req, res) => {
         id: user._id,
         nickname: user.nickname,
         email: user.email,
+        gender: user.gender,
+        school: user.school,
+        profileImage: user.profileImage,
       },
     });
 
@@ -113,6 +116,9 @@ app.post('/api/auth/login', async (req, res) => {
         id: user._id,
         nickname: user.nickname,
         email: user.email,
+        gender: user.gender,
+        school: user.school,
+        profileImage: user.profileImage,
       },
     });
   } catch (error) {
@@ -202,6 +208,9 @@ app.post('/api/auth/kakao', async (req, res) => {
         user: {
           id: user._id,
           nickname: user.nickname,
+          email: user.email,
+          gender: user.gender,
+          school: user.school,
           profileImage: user.profileImage,
         },
       });
