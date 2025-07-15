@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Quiz = require('../models/Quiz');
+const Record = require('../models/Record'); // Record 모델 추가
 const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
@@ -165,6 +166,15 @@ router.delete('/:id', auth, async (req, res) => {
         }
       });
     }
+
+    // 연관된 Record 데이터 삭제
+    await Record.deleteMany({ quiz: req.params.id });
+
+    // 오답 노트에서도 해당 퀴즈 삭제
+    await Record.updateMany(
+      { 'wrongQuizzes.quiz': req.params.id },
+      { $pull: { wrongQuizzes: { quiz: req.params.id } } }
+    );
 
     await Quiz.findByIdAndDelete(req.params.id);
     res.json({ message: '퀴즈가 성공적으로 삭제되었습니다.' });
