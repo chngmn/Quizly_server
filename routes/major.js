@@ -27,7 +27,7 @@ router.get('/quiz-counts', async (req, res) => {
         let icon, bgColor, category, useImage, imagePath;
         
         switch(major.name) {
-          case '전산학/컴퓨터과학':
+          case '컴퓨터공학':
             icon = 'MdComputer';
             bgColor = 'bg-orange-500';
             category = 'computer-science';
