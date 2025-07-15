@@ -16,8 +16,8 @@ const userSchema = new mongoose.Schema({
     type: String, 
     enum: [
       'seoul_national', 'yonsei', 'korea', 'sungkyunkwan', 'hanyang', 
-      'kyunghee', 'sogang', 'hongik', 'dongguk', 'chungang', 
-      'kookmin', 'sejong', 'konkuk', 'kaist', 'other'
+      'kyunghee', 'sogang', 'hongik', 'ewha', 'chungang', 
+      'dgist', 'sejong', 'konkuk', 'kaist', 'sookmyung', 'other'
     ] 
   },
   marketingAgreement: { type: Boolean, default: false },
