@@ -21,7 +21,6 @@ const port = 8000;
 
 app.use(express.json());
 app.use(cors());
-app.use('/api/user', userRouter);
 
 app.use('/api/quizzes', quizRouter);
 app.use('/api/records', recordRouter);
