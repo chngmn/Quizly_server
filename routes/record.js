@@ -110,23 +110,25 @@ router.get('/solved-quizzes', auth, async (req, res) => {
                                .sort({ createdAt: -1 });
     
     // 기존 데이터에 everWrong 필드가 없는 경우 기본값 설정
-    const processedRecords = records.map(record => {
-      const recordObj = record.toObject();
-      
-      // everWrong 필드가 없는 경우, wrongQuizzes 배열이 있고 길이가 0보다 크면 true, 아니면 false로 설정
-      if (recordObj.everWrong === undefined) {
-        // 기존 데이터에서는 wrongQuizzes 배열의 길이로 판단
-        recordObj.everWrong = !recordObj.isCorrect;
+    const processedRecords = records
+      .filter(record => record.quiz !== null) // quiz가 null인 레코드(삭제된 퀴즈)는 제외
+      .map(record => {
+        const recordObj = record.toObject();
         
-        // DB 업데이트 (비동기로 실행)
-        Record.updateOne(
-          { _id: record._id }, 
-          { $set: { everWrong: recordObj.everWrong } }
-        ).catch(err => console.error('Record update error:', err));
-      }
-      
-      return recordObj;
-    });
+        // everWrong 필드가 없는 경우, wrongQuizzes 배열이 있고 길이가 0보다 크면 true, 아니면 false로 설정
+        if (recordObj.everWrong === undefined) {
+          // 기존 데이터에서는 wrongQuizzes 배열의 길이로 판단
+          recordObj.everWrong = !recordObj.isCorrect;
+          
+          // DB 업데이트 (비동기로 실행)
+          Record.updateOne(
+            { _id: record._id }, 
+            { $set: { everWrong: recordObj.everWrong } }
+          ).catch(err => console.error('Record update error:', err));
+        }
+        
+        return recordObj;
+      });
     
     res.json(processedRecords);
   } catch (err) {
@@ -167,7 +169,9 @@ router.get('/wrong-answers', auth, async (req, res) => {
         });
     });
 
-    res.json(Object.values(uniqueWrongQuizzes));
+    // 퀴즈가 있는 오답 목록만 반환
+    const filteredWrongQuizzes = Object.values(uniqueWrongQuizzes).filter(wq => wq.quiz !== null);
+    res.json(filteredWrongQuizzes);
   } catch (err) {
     console.error('오답 목록 조회 중 오류 발생:', err);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
