@@ -11,6 +11,7 @@ const recordSchema = new mongoose.Schema({
   user:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   quiz:      { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   isCorrect: { type: Boolean, required: true },
+  everWrong: { type: Boolean, default: false }, // 한 번이라도 틀린 적이 있는지 여부
   submittedAnswer: { type: mongoose.Schema.Types.Mixed },
   wrongQuizzes: [wrongQuizSchema]
 }, { timestamps: true });
