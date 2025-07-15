@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 const axios = require('axios'); // axios import 추가
+const bcrypt = require('bcryptjs');
 
 // 내 프로필 정보 조회
 router.get('/profile', auth, async (req, res) => {
@@ -69,6 +70,51 @@ router.put('/profile', auth, async (req, res) => {
   } catch (error) {
     console.error('프로필 업데이트 오류:', error);
     res.status(500).json({ error: '프로필 업데이트 중 서버 오류가 발생했습니다.' });
+  }
+});
+
+// 비밀번호 변경
+router.put('/password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: '현재 비밀번호와 새 비밀번호를 모두 입력해주세요.' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: '새 비밀번호는 최소 6자 이상이어야 합니다.' });
+    }
+    
+    // 사용자 정보 조회
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    }
+    
+    // 카카오 로그인 사용자는 비밀번호 변경 불가
+    if (user.kakaoId && !user.password) {
+      return res.status(400).json({ error: '카카오 로그인 사용자는 비밀번호를 변경할 수 없습니다.' });
+    }
+    
+    // 현재 비밀번호 확인
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ error: '현재 비밀번호가 일치하지 않습니다.' });
+    }
+    
+    // 새 비밀번호 해시화
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    
+    // 비밀번호 업데이트
+    await User.findByIdAndUpdate(req.user.userId, {
+      password: hashedNewPassword
+    });
+    
+    res.json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
+  } catch (error) {
+    console.error('비밀번호 변경 오류:', error);
+    res.status(500).json({ error: '비밀번호 변경 중 서버 오류가 발생했습니다.' });
   }
 });
 
